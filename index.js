@@ -1,65 +1,74 @@
 class Stepper {
   constructor(steps, pins, signals) {
-    this.state = 0; // current steps in revolution (0 ~ steps-1)
-    this.direction = 1; // 1 for clockwise, -1 for anti-clockwise
-    this.rpm = 10;
-    this.steps = steps;
-    this.pins = pins;
-    for (var i = 0; i < this.pins.length; i++) {
-      pinMode(this.pins[i], OUTPUT);
-    }
-    if (signals) {
-      this.signals = signals;
-    } else {
-      if (this.pins.length === 2) {
-        this.signals = [0b01, 0b11, 0b10, 0b00];
-      } else if (this.pins.length === 4) {
-        this.signals = [0b1010, 0b0110, 0b0101, 0b1001];
-      } else {
-        throw "Parameter signals required";
+      this.debug = false;
+      this.state = 0; // current steps in revolution (0 ~ steps-1)
+      this.direction = 1; // 1 for clockwise, -1 for anti-clockwise
+      this.rpm = 10;
+      this.t = null; // interval ID
+      this.steps = steps;
+      this.pins = this.setMode(pins, OUTPUT);
+      this.signals = this.setSignals(signals);
+  }
+
+  setMode(pins, mode) {
+      for (var i = 0; i < pins.length; i++) {
+          pinMode(pins[i], mode);
       }
-    }
+      return pins;
+  }
+
+  setSignals(signals) {
+      if (signals) {
+          signals = signals;
+      } else if (this.pins.length === 2) {
+          signals = [0b01, 0b11, 0b10, 0b00];
+      } else if (this.pins.length === 4) {
+          signals = [0b1100, 0b0110, 0b0011, 0b1001];
+      } else {
+          throw "Parameter signals required";
+      }
+      return signals;
   }
 
   setSpeed(rpm) {
-    this.rpm = rpm;
+      this.rpm = rpm;
   }
 
-  step(count) {
-    this.direction = count > 0 ? 1 : -1;
-    var cnt = Math.abs(count);
-    var i = cnt;
-    var phases = this.signals.length;
-    var start = millis();
-    var sm = (60 * 1000) / (this.steps * this.rpm); // 1 step in ms
-    var tts = start;
-    while (i > 0) {
-      var now = millis();
-      if (now >= tts) {
-        if (this.direction === 1) {
-          this.state++;
-          if (this.state === this.steps) {
-            this.state = 0;
+  step(count, cb) {
+      this.direction = count > 0 ? 1 : -1;
+      var cnt = Math.abs(count);
+      var moved = 0;
+      var phases = this.signals.length;
+      var sm = (60 * 1000) / (this.steps * this.rpm); // ms/step
+
+      function run() {
+          this.state = (this.state + this.direction + phases) % phases;
+          this.move();
+          moved++;
+          if (moved >= cnt) {
+              this.stop(cb);
           }
-        } else {
-          // -1
-          if (this.state === 0) {
-            this.state = this.steps;
-          }
-          this.state--;
-        }
-        i--;
-        this.move(this.state % phases);
-        tts = start + (cnt - i) * sm;
       }
-    }
+      this.t = setInterval(run.bind(this), sm);
   }
 
-  move(phase) {
-    var bit = this.signals[phase];
-    for (var i = 0; i < this.pins.length; i++) {
-      digitalWrite(this.pins[i], (bit >> (this.pins.length - i - 1)) & 1);
-    }
+  stop(cb = function(){}) {
+      this.debug && console.log('stopping...');
+      if (this.t) {
+          clearInterval(this.t);
+      }
+      for (var i = 0; i < this.pins.length; i++) {
+          digitalWrite(this.pins[i], 0);
+      }
+      cb();
+  }
+
+  move() {
+      var bit = this.signals[this.state];
+      this.debug && console.log(this.state, Number(bit).toString(2).padStart(4, '0'));
+      for (var i = 0; i < this.pins.length; i++) {
+          digitalWrite(this.pins[i], (bit >> (this.pins.length - i - 1)) & 1);
+      }
   }
 }
 
