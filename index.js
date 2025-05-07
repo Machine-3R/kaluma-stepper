@@ -1,6 +1,5 @@
 class Stepper {
   constructor(steps, pins, signals) {
-      this.debug = false;
       this.state = 0; // current steps in revolution (0 ~ steps-1)
       this.direction = 1; // 1 for clockwise, -1 for anti-clockwise
       this.rpm = 10;
@@ -53,7 +52,6 @@ class Stepper {
   }
 
   stop(cb = function(){}) {
-      this.debug && console.log('stopping...');
       if (this.t) {
           clearInterval(this.t);
       }
@@ -65,7 +63,6 @@ class Stepper {
 
   move() {
       var bit = this.signals[this.state];
-      this.debug && console.log(this.state, Number(bit).toString(2).padStart(4, '0'));
       for (var i = 0; i < this.pins.length; i++) {
           digitalWrite(this.pins[i], (bit >> (this.pins.length - i - 1)) & 1);
       }
